@@ -9,6 +9,7 @@ import (
 const (
 	APIVERSION_V1 = iota
 	APIVERSION_V2
+	APIVERSION_ACI
 )
 
 var (
@@ -37,6 +38,52 @@ var (
 	RegistryVersion     string
 	DistributionVersion string
 	Standalone          string
+	OssSwitch           string
+)
+
+// object storage driver config parameters
+// TBD: It should be considered to refine the universal config parameters
+var (
+	Endpoint        string
+	Bucket          string
+	AccessKeyID     string
+	AccessKeysecret string
+
+	//upyun unique
+	User   string
+	Passwd string
+
+	//qcloud unique
+	AccessID string
+
+	//googlecloud unique
+	Projectid      string
+	Scope          string
+	PrivateKeyFile string
+	Clientemail    string
+)
+
+// Clair service config parameters
+var (
+	//Path of the database. Default:  '/db'
+	ClairDBPath string
+	//Remove all the data in DB after stop the clair service. Default: false
+	ClairKeepDB bool
+	//Log level of the clair lib. Default: 'info'
+	//All values: ['critical, error, warning, notice, info, debug, trace']
+	ClairLogLevel string
+	//Update CVE date in every '%dh%dm%ds'. Default: '1h0m0s'
+	ClairUpdateDuration string
+	//Return CVEs with minimal priority to Dockyard. Default: 'Low'
+	//All values: ['Unknown, Negligible, Low, Medium, High, Critical, Defcon1']
+	ClairVulnPriority string
+)
+
+// OSS backend driver parameters
+var (
+	APIPort      int
+	APIHttpsPort int
+	PartSizeMB   int
 )
 
 func SetConfig(path string) error {
@@ -119,12 +166,6 @@ func SetConfig(path string) error {
 
 	DBDB, err = conf.Int64("db::db")
 
-	//Dockyard object storage,default to use dockyard storage
-	BackendDriver = "native"
-	if backenddriver := conf.String("dockyard::driver"); backenddriver != "" {
-		BackendDriver = backenddriver
-	}
-
 	if imagepath := conf.String("dockyard::path"); imagepath != "" {
 		ImagePath = imagepath
 	} else if imagepath == "" {
@@ -154,6 +195,89 @@ func SetConfig(path string) error {
 	} else if standalone == "" {
 		err = fmt.Errorf("Standalone version value is null")
 	}
+	if ossswitch := conf.String("dockyard::ossswitch"); ossswitch != "" {
+		OssSwitch = ossswitch
+	} else if ossswitch == "" {
+		OssSwitch = "disable"
+	}
+
+	//Dockyard object storage,default to use dockyard storage
+	BackendDriver = "native"
+	if backenddriver := conf.String("dockyard::driver"); backenddriver != "" {
+		BackendDriver = backenddriver
+	}
+
+	// TBD: It should be considered to refine the universal config parameters
+	switch BackendDriver {
+	case "native":
+		//It will be supported soon
+	case "qiniu", "aliyun", "amazons3":
+		if endpoint := conf.String(BackendDriver + "::" + "endpoint"); endpoint != "" {
+			Endpoint = endpoint
+		} else {
+			err = fmt.Errorf("Endpoint value is null")
+		}
+
+		if bucket := conf.String(BackendDriver + "::" + "bucket"); bucket != "" {
+			Bucket = bucket
+		} else {
+			err = fmt.Errorf("Bucket value is null")
+		}
+
+		if accessKeyID := conf.String(BackendDriver + "::" + "accessKeyID"); accessKeyID != "" {
+			AccessKeyID = accessKeyID
+		} else {
+			err = fmt.Errorf("AccessKeyID value is null")
+		}
+
+		if accessKeysecret := conf.String(BackendDriver + "::" + "accessKeysecret"); accessKeysecret != "" {
+			AccessKeysecret = accessKeysecret
+		} else {
+			err = fmt.Errorf("AccessKeysecret value is null")
+		}
+
+	case "upyun":
+		if endpoint := conf.String(BackendDriver + "::" + "endpoint"); endpoint != "" {
+			Endpoint = endpoint
+		} else {
+			err = fmt.Errorf("Endpoint value is null")
+		}
+
+		if bucket := conf.String(BackendDriver + "::" + "bucket"); bucket != "" {
+			Bucket = bucket
+		} else {
+			err = fmt.Errorf("Bucket value is null")
+		}
+
+		if user := conf.String(BackendDriver + "::" + "user"); user != "" {
+			User = user
+		} else {
+			err = fmt.Errorf("User value is null")
+		}
+
+		if passwd := conf.String(BackendDriver + "::" + "passwd"); passwd != "" {
+			Passwd = passwd
+		} else {
+			err = fmt.Errorf("Passwd value is null")
+		}
+
+	case "qcloud":
+	//It will be supported soon
+	case "oss":
+		APIPort, err = conf.Int(BackendDriver + "::" + "apiport")
+		APIHttpsPort, err = conf.Int(BackendDriver + "::" + "apihttpsport")
+		PartSizeMB, err = conf.Int(BackendDriver + "::" + "partsizemb")
+	case "googlecloud":
+		//It will be supported soon
+	default:
+		err = fmt.Errorf("Doesn't support %v now", BackendDriver)
+	}
+
+	ClairDBPath = conf.String("clair::path")
+	ClairLogLevel = conf.String("clair::logLevel")
+	ClairKeepDB, _ = conf.Bool("clair::keepDB")
+	ClairUpdateDuration = conf.String("clair::updateDuration")
+	ClairVulnPriority = conf.String("clair::vulnPriority")
 
 	return err
 }
